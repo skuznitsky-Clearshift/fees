@@ -622,6 +622,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
         <input id="userRate" inputmode="decimal" placeholder="0.0000">
         <span class="u" id="userRateUnit"></span>
       </div>
+      <div class="sub" id="userRateTip" style="margin-top:7px"></div>
     </div>
 
     <div id="spreadOut" style="margin-top:13px"></div>
@@ -629,17 +630,14 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 
   <div class="panel">
     <div class="lbl">סכום ההעברה</div>
-    <div class="grid2">
-      <div>
-        <span class="k" id="amtLblA" style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px"></span>
-        <div class="inp"><input id="amtFrom" inputmode="decimal" placeholder="0"><span class="u" id="amtUnitA"></span></div>
-      </div>
-      <div>
-        <span class="k" id="amtLblB" style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px"></span>
-        <div class="inp"><input id="amtTo" inputmode="decimal" placeholder="0"><span class="u" id="amtUnitB"></span></div>
-      </div>
+    <div class="seg wide" id="amtCurSeg">
+      <button data-a="ils">בשקלים</button>
+      <button data-a="fx" class="on">בדולרים</button>
     </div>
-    <div class="sub" style="margin-top:9px">אפשר להזין בכל אחד מהשדות — השני מתמלא לפי השער שהלקוח מקבל.</div>
+    <div class="inp" style="margin-top:11px">
+      <input id="amt" inputmode="decimal" placeholder="0"><span class="u" id="amtUnit"></span>
+    </div>
+    <div class="sub" id="amtEcho" style="margin-top:9px"></div>
   </div>
 
   <div class="panel">
@@ -676,7 +674,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
         <div id="destWrap">
           <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px">יעד התשלום</span>
           <div class="seg" id="destSeg">
-            <button data-d="us" class="on">ארה"ב</button>
+            <button data-d="us" class="on">ארה"ב ואירופה</button>
             <button data-d="other">מדינה אחרת</button>
           </div>
         </div>
@@ -689,12 +687,12 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
     <div class="lbl">היקף הפעילות של הלקוח</div>
     <div class="grid2">
       <div>
-        <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px">מחזור שנתי</span>
-        <div class="inp"><input id="annVol" inputmode="decimal" placeholder="0"><span class="u" id="annVolU"></span></div>
+        <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px">סכום פעולה / פעולה ממוצעת</span>
+        <div class="inp"><input id="avgTxn" inputmode="decimal" placeholder="0"><span class="u" id="avgTxnU"></span></div>
       </div>
       <div>
-        <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px">ממוצע פעולה</span>
-        <div class="inp"><input id="avgTxn" inputmode="decimal" placeholder="0"><span class="u" id="avgTxnU"></span></div>
+        <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:5px">מחזור שנתי</span>
+        <div class="inp"><input id="annVol" inputmode="decimal" placeholder="0"><span class="u" id="annVolU"></span></div>
       </div>
     </div>
     <div class="sub" id="txnCount" style="margin-top:9px"></div>
@@ -765,7 +763,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.1", d: "10.08.2026" };
+const BUILD = { v: "1.2", d: "10.08.2026" };
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -803,6 +801,25 @@ const CUR = [
   {c:"ILS", he:"שקל חדש",                  sym:"₪",    flag:"\u{1F1EE}\u{1F1F1}"},
 ];
 const CURBY = {}; CUR.forEach(x => CURBY[x.c] = x);
+
+/* שמות קצרים למשפטים רצים — "בדקנו שער שקל/דולר" ולא "שקל חדש/דולר אמריקאי" */
+const SHORT = {
+  ILS:"שקל", USD:"דולר", EUR:"אירו", GBP:"ליש\"ט", CNY:"יואן", JPY:"ין", CHF:"פרנק",
+  CAD:"דולר קנדי", AUD:"דולר אוסטרלי", TRY:"לירה טורקית", INR:"רופי", HKD:"דולר הונג קונג",
+  SGD:"דולר סינגפורי", AED:"דירהם", SEK:"כתר שוודי", NOK:"כתר נורווגי", DKK:"כתר דני",
+  PLN:"זלוטי", CZK:"כתר צ׳כי", HUF:"פורינט", RON:"לאו", ZAR:"ראנד", THB:"באט",
+  KRW:"וון", VND:"דונג", MXN:"פזו", BRL:"ריאל", NZD:"דולר ניו־זילנדי"
+};
+function shortHe(c){ return SHORT[c] || (CURBY[c] ? CURBY[c].he : c); }
+
+/* "בשקלים" / "בדולרים" / "באירו" — הריבוי בעברית לא נגזר מהיחיד,
+   ומטבעות כמו אירו או יואן לא מקבלים סיומת בכלל. */
+const INCUR = { ILS:"בשקלים", USD:"בדולרים", EUR:"באירו", GBP:"בליש\"ט", CNY:"ביואן",
+  JPY:"בין", CHF:"בפרנקים", TRY:"בלירות טורקיות", INR:"ברופי", AED:"בדירהם",
+  SEK:"בכתרים שוודיים", NOK:"בכתרים נורווגיים", DKK:"בכתרים דניים", PLN:"בזלוטי",
+  CZK:"בכתרים צ׳כיים", HUF:"בפורינט", RON:"בלאו", ZAR:"בראנד", THB:"בבאט",
+  KRW:"בוון", VND:"בדונג", MXN:"בפזו", BRL:"בריאל" };
+function inCur(c){ return INCUR[c] || ("ב" + shortHe(c)); }
 
 /* ============================================================
    עזרים
@@ -928,6 +945,7 @@ const S = {
   loading: false,
   liveErr: null,
   dest: "us",
+  amtCur: "fx",        // הסכום מוזן במטבע הזר כברירת מחדל, לא בשקלים
   tab: "spread",
   revealed: false,     // התוצאה נחשפת רק אחרי לחיצה על "בדוק חיסכון"
   yuan: { usd: null, cny: null, err: null }
@@ -1073,26 +1091,37 @@ function readFees(){
   };
 }
 
-/* הכלל שהוגדר: לדולר לארה"ב וליורו אין לקלירשיפט עלות בנקים מקשרים,
-   ולכן כל הסכום הזה הוא חיסכון. בכל מטבע אחר גם לקלירשיפט יש את
-   העלות הזו — היא לא נספרת כחיסכון. */
+/* הכלל שהוגדר: ליורו, ולדולר שנשלח לארה"ב או לאירופה, אין לקלירשיפט
+   עלות בנקים מקשרים — ולכן כל הסכום הזה הוא חיסכון. בכל מטבע אחר גם
+   לקלירשיפט יש את העלות הזו, והיא לא נספרת כחיסכון. */
 function corrIsSaving(){
   const f = CURBY[foreignSide()];
   if (f.c === "EUR") return true;
-  if (f.c === "USD") return S.dest === "us";
+  if (f.c === "USD") return S.dest === "us";   // "us" = ארה"ב ואירופה
   return false;
 }
+function destHe(){ return S.dest === "us" ? " לארה\"ב או לאירופה" : ""; }
 
-/* המרה בין שני שדות הסכום, לפי שער שרשום כ־base ליחידת fx */
-function convFromTo(a, rate){
-  const sd = sides();
-  if (!isFinite(a) || !isFinite(rate) || rate <= 0) return NaN;
-  return S.from === sd.base.c ? a / rate : a * rate;   // base→fx מחלק, fx→base מכפיל
+/* השער שההמרה נעשית בו בפועל: זה שהלקוח מקבל, ולפני שהוזן — שער השוק */
+function activeRate(){
+  const u = num($("userRate"));
+  return (isFinite(u) && u > 0) ? u : (S.live ? S.live.rate : NaN);
 }
-function convToFrom(b, rate){
-  const sd = sides();
-  if (!isFinite(b) || !isFinite(rate) || rate <= 0) return NaN;
-  return S.from === sd.base.c ? b * rate : b / rate;
+
+/* הקלדה בלי נקודה עשרונית: "3005" הופך ל־3.0050.
+   המיקום הנכון של הנקודה נגזר משער השוק ולא ממספר ספרות קבוע — אחרת
+   4451 ביואן היה הופך ל־4.4510 במקום 0.4451. בוחרים את המיקום שמביא
+   את התוצאה הכי קרוב לשער השוק ביחס. */
+function impliedDecimal(digits, ref){
+  if (!/^\d+$/.test(digits) || !isFinite(ref) || ref <= 0) return NaN;
+  let best = NaN, bestErr = Infinity;
+  for (let p = 0; p <= digits.length; p++) {
+    const v = parseFloat(digits.slice(0, p) + "." + digits.slice(p));
+    if (!isFinite(v) || v <= 0) continue;
+    const err = Math.abs(Math.log(v / ref));
+    if (err < bestErr) { bestErr = err; best = v; }
+  }
+  return best;
 }
 
 function computeSpread(){
@@ -1114,16 +1143,18 @@ function computeSpread(){
     if (Math.abs(spreadPct) < 0.005) spreadPct = 0;
   }
 
-  /* סכום ההעברה, מנורמל ליחידות המטבע הזר וגם לשקלים */
-  const aFrom = num($("amtFrom"));
+  /* סכום ההעברה מוזן בשדה אחד, והכפתור קובע באיזה מטבע.
+     כשהוא מוזן בשקלים, הסכום במטבע הזר נגזר בשער שהלקוח באמת מקבל. */
+  const a = num($("amt"));
   const rateForAmt = isFinite(user) && user > 0 ? user : live;
-  const amtFrom = aFrom;
-  const amtTo = convFromTo(aFrom, rateForAmt);
+  const amtFx = S.amtCur === "fx" ? a
+              : (isFinite(a) && isFinite(rateForAmt) && rateForAmt > 0 ? a / rateForAmt : NaN);
 
-  /* גודל העסקה במטבע הזר: אם המקור הוא base צריך להמיר, אחרת הוא כבר fx */
-  const amtFx = S.from === sd.base.c ? convFromTo(amtFrom, rateForAmt) : amtFrom;
+  /* שווי השוק של ההעברה — הבסיס לכל האחוזים */
   const ilsUnitFx = ilsPerCached(fx.c);
   const amtIls = isFinite(amtFx) && isFinite(ilsUnitFx) ? amtFx * ilsUnitFx : NaN;
+  /* מה שהלקוח משלם בפועל, בשער שלו — לא זהה לשווי השוק, וההפרש הוא המרווח */
+  const amtPaidIls = isFinite(amtFx) && isFinite(rateForAmt) ? amtFx * rateForAmt : NaN;
   const amtUsd = isFinite(amtIls) && isFinite(usdIls()) ? amtIls / usdIls() : NaN;
 
   /* תרגום העמלות הקבועות ($) לאחוזים מהעסקה */
@@ -1157,7 +1188,7 @@ function computeSpread(){
   }
   const annSavePct = isFinite(annSaveIls) && isFinite(annVolIls) && annVolIls > 0 ? annSaveIls / annVolIls * 100 : NaN;
 
-  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtFrom, amtTo, amtIls, amtFx, amtUsd,
+  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtIls, amtPaidIls, amtFx, amtUsd,
            swiftPct, corrPct, bankPct, csPct, savePct, bankIls, csIls, saveIls, corrSave,
            txns, annVol, annVolIls, annSaveIls, annSavePct, fixedUsd };
 }
@@ -1190,15 +1221,26 @@ function renderSpread(){
     : "יצואן או עמותה ממירים " + u.fx.he + " לשקלים — שער גבוה יותר מכניס להם יותר.";
   $("tabYuan").style.opacity = imp ? "" : ".45";
 
+  /* דוגמה חיה לקיצור ההקלדה, מבוססת על השער האמיתי של הצמד הנוכחי */
+  if (S.live) {
+    const ex = S.live.rate.toFixed(rateDigits(S.live.rate));
+    $("userRateTip").textContent = "אפשר להקליד רק ספרות — " + ex.replace(".", "") +
+                                   " יושלם אוטומטית ל־" + ex + ".";
+  } else $("userRateTip").textContent = "";
+
   $("userRateUnit").textContent = u.txt;
   $("userRateLbl").textContent = imp
     ? "השער שהלקוח משלם בבנק (" + u.txt + ")"
     : "השער שהלקוח מקבל בבנק (" + u.txt + ")";
-  $("amtLblA").textContent = "סכום ב" + f.he;
-  $("amtLblB").textContent = "סכום ב" + t.he;
-  $("amtUnitA").textContent = f.c; $("amtUnitB").textContent = t.c;
-  $("annVolU").textContent = CURBY[foreignSide()].c;
-  $("avgTxnU").textContent = CURBY[foreignSide()].c;
+  /* בורר מטבע הסכום: ברירת המחדל היא המטבע הזר, לא השקל */
+  const segA = Array.from($("amtCurSeg").querySelectorAll("button"));
+  segA[0].textContent = inCur(u.base.c);
+  segA[1].textContent = inCur(u.fx.c);
+  segA.forEach(b => b.classList.toggle("on", b.dataset.a === S.amtCur));
+  $("amtUnit").textContent = S.amtCur === "fx" ? u.fx.c : u.base.c;
+
+  $("annVolU").textContent = u.fx.c;
+  $("avgTxnU").textContent = u.fx.c;
 
   /* יעד התשלום נשאל רק כשהוא משנה משהו — כלומר בדולר */
   $("destWrap").classList.toggle("hide", foreignSide() !== "USD");
@@ -1222,9 +1264,16 @@ function renderSpread(){
   const cn = $("corrNote");
   if (!R.fee.on) cn.innerHTML = "";
   else if (R.corrSave)
-    cn.innerHTML = '<div class="note info">'+esc("בתשלום ב"+R.fx.he+(R.fx.c==="USD"?" לארה\"ב":"")+" אין לקלירשיפט עלות של בנקים מקשרים — הסכום הזה נספר במלואו כחיסכון.")+'</div>';
+    cn.innerHTML = '<div class="note info">'+esc("בתשלום ב"+R.fx.he+(R.fx.c==="USD"?destHe():"")+" אין לקלירשיפט עלות של בנקים מקשרים — הסכום הזה נספר במלואו כחיסכון.")+'</div>';
   else
     cn.innerHTML = '<div class="note warn">'+esc("ב"+R.fx.he+" גם לקלירשיפט יש עלות של בנקים מקשרים, ולכן היא לא נספרת כחיסכון — היא מופיעה בשני הצדדים.")+'</div>';
+
+  /* הצגת הסכום במטבע השני, כדי שלא צריך לחשב בראש */
+  $("amtEcho").textContent = isFinite(R.amtFx) && isFinite(R.amtPaidIls)
+    ? (S.amtCur === "fx"
+        ? "כלומר " + n0(R.amtPaidIls) + " ₪ בשער של הלקוח"
+        : "כלומר " + n0(R.amtFx) + " " + u.fx.c + " בשער של הלקוח")
+    : "בחר מטבע והזן את סכום ההעברה.";
 
   /* מספר פעולות */
   $("txnCount").textContent = isFinite(R.txns)
@@ -1261,7 +1310,7 @@ function renderResultSpread(R){
   if (R.fee.on) {
     rows2.push(pctRow("עמלת קלירשיפט", R.fee.cs, A*R.fee.cs/100));
     if (!R.corrSave) rows2.push(pctRow("בנקים מקשרים", R.corrPct, isFinite(R.corrPct)?A*R.corrPct/100:NaN, "קיים גם בקלירשיפט ב"+R.fx.he));
-    else rows2.push(pctRow("בנקים מקשרים", 0, 0, "אין עלות כזו ב"+R.fx.he+(R.fx.c==="USD"?" לארה\"ב":""), true));
+    else rows2.push(pctRow("בנקים מקשרים", 0, 0, "אין עלות כזו ב"+R.fx.he+(R.fx.c==="USD"?destHe():""), true));
     rows2.push(pctRow("מרווח שער", 0, 0, "המרה לפי שער השוק", true));
   }
   rows2.push('<tr class="sum"><td>סה"כ עלות בקלירשיפט</td><td>'+nf(R.csPct,3)+"%  ·  "+n0(R.csIls)+" ₪</td></tr>");
@@ -1299,29 +1348,29 @@ function renderResultSpread(R){
 function msgSpread(R){
   if (!isFinite(R.live)) return "—";
   const st = stampNow(R.live && S.live ? S.live.ts : Date.now());
-  const fx = R.fx, unit = R.base.sym + " ל־1 " + fx.sym;
+  const fx = R.fx;
   const L = [];
   L.push("היי,");
   L.push("");
   L.push("בדקנו עכשיו את שער " + fx.he + " בשוק מול השער שאתם מקבלים.");
   L.push("");
-  L.push("נבדק: " + st.date + " בשעה " + st.time);
-  L.push("שער השוק הרציף: " + nfRate(S.live.rate) + " " + unit);
+  L.push("הבדיקה בוצעה ב - " + st.date + " בשעה " + st.time);
+  L.push("בדקנו שער " + shortHe(R.base.c) + "/" + shortHe(fx.c));
+  L.push("שער רציף: " + nfRate(S.live.rate));
   if (isFinite(R.user)) {
-    L.push("השער שלכם: " + nfRate(R.user) + " " + unit);
+    L.push("השער שלכם: " + nfRate(R.user));
     if (R.spreadPct > 0.02)      L.push("המרווח: " + nf(R.spreadPct,2) + "% מעל שער השוק.");
     else if (R.spreadPct < -0.02) L.push("השער שלכם טוב ב־" + nf(-R.spreadPct,2) + "% משער השוק.");
     else                          L.push("השער שלכם כמעט זהה לשער השוק.");
   }
 
-  /* ההדגמה הקבועה — 100 אלף דולר, כדי שהמספר יהיה מוחשי */
-  const uIls = usdIls();
-  /* כשאין מרווח אין מה להדגים — "הפרש 0 ₪ לטובתכם" רק מבלבל */
-  if (isFinite(R.spreadPct) && R.spreadPct !== 0 && isFinite(uIls)) {
-    const demoIls = 100000 * uIls;
+  /* ההדגמה רצה על סכום ההעברה שהוזן בפועל, לא על 100,000 שרירותיים.
+     כשאין מרווח אין מה להדגים — "הפרש 0 ₪ לטובתכם" רק מבלבל. */
+  if (isFinite(R.spreadPct) && R.spreadPct !== 0 && isFinite(R.amtIls) && R.amtIls > 0) {
+    const demoIls = R.amtIls;
     const gap = demoIls * R.spreadPct / 100;
     L.push("");
-    L.push("מה זה אומר בפועל — על העברה של 100,000 $:");
+    L.push("מה זה אומר בפועל — עלות בשקלים על העברה של " + n0(R.amtFx) + " " + fx.sym + ":");
     L.push("לפי שער השוק: " + n0(demoIls) + " ₪");
     L.push("לפי השער שלכם: " + n0(demoIls + gap) + " ₪");
     L.push("הפרש על העברה אחת: " + n0(Math.abs(gap)) + " ₪" + (gap > 0 ? " שאתם משלמים מעבר." : " לטובתכם."));
@@ -1330,13 +1379,17 @@ function msgSpread(R){
   if (R.fee.on) {
     /* בלי הכותרת כשכל העמלות אפס — אחרת מובטחת רשימה ואין אחריה כלום */
     const anyFee = R.fee.exch || R.fee.send || R.fee.swift || R.fee.corr;
+    const known = isFinite(R.amtFx) && isFinite(R.amtIls) && R.amtIls > 0;
+    /* עמלה באחוזים לבדה לא אומרת ללקוח כלום — לידה הסכום במטבע ובשקלים */
+    const both = p => known ? " — " + n0(R.amtFx * p / 100) + " " + fx.sym +
+                              " · " + n0(R.amtIls * p / 100) + " ₪" : "";
     L.push("");
     if (anyFee) L.push("בנוסף למרווח יש עמלות:");
-    if (R.fee.exch) L.push("· עמלת חליפין " + nf(R.fee.exch,2) + "%");
-    if (R.fee.send) L.push("· עמלת שליחת מט\"ח " + nf(R.fee.send,2) + "%");
+    if (R.fee.exch) L.push("· עמלת חליפין " + nf(R.fee.exch,2) + "%" + both(R.fee.exch));
+    if (R.fee.send) L.push("· עמלת שליחת מט\"ח " + nf(R.fee.send,2) + "%" + both(R.fee.send));
     if (R.fee.swift) L.push("· סוויפט " + n0(R.fee.swift) + " $ לפעולה");
     if (R.fee.corr) L.push("· בנקים מקשרים " + n0(R.fee.corr) + " $ לפעולה");
-    if (isFinite(R.amtIls) && R.amtIls > 0) {
+    if (known) {
       L.push("");
       L.push("על העברה של " + n0(R.amtFx) + " " + fx.sym + ":");
       L.push("העלות שלכם היום: " + n0(R.bankIls) + " ₪ (" + nf(R.bankPct,2) + "%)");
@@ -1354,7 +1407,7 @@ function msgSpread(R){
     L.push("החיסכון השנתי המשוער: " + n0(R.annSaveIls) + " ₪.");
   }
   L.push("");
-  L.push("השערים נכונים לרגע הבדיקה ומשתנים במהלך היום.");
+  L.push("מעבר לחיסכון, יש לנו שירות מעולה ונשמח לעבוד יחד.");
   return L.join("\n");
 }
 
@@ -1517,10 +1570,9 @@ function init(){
   $("swapBtn").addEventListener("click", () => {
     const a = S.from; S.from = S.to; S.to = a;
     $("curFrom").value = S.from; $("curTo").value = S.to;
-    /* הסכומים מתחלפים יחד עם הכיוון, אחרת המספרים על המסך משקרים.
-       השער עצמו נשאר כפי שהוא: הוא רשום כשקלים ליחידת מטבע זר, וזה
-       לא משתנה עם כיוון ההמרה — רק המשמעות של "מרווח" מתהפכת. */
-    const av = $("amtFrom").value; $("amtFrom").value = $("amtTo").value; $("amtTo").value = av;
+    /* הסכום לא נוגע: הוא מוזן במטבע מפורש (שקל או המטבע הזר), ושני אלה
+       לא מתחלפים כשמחליפים כיוון. גם השער נשאר — הוא רשום כשקלים ליחידת
+       מטבע זר, וזה קבוע; רק המשמעות של "מרווח" מתהפכת. */
     loadLive(false);
   });
   $("refreshBtn").addEventListener("click", () => loadLive(true));
@@ -1558,30 +1610,24 @@ function init(){
     });
   });
 
-  /* כתיבה בשדה סכום אחד ממלאת את השני, לפי השער שהלקוח מקבל בפועל
-     (ואם עוד לא הוזן — לפי שער השוק). הדגל מונע לולאת אירועים. */
-  let syncing = false;
-  const activeRate = () => {
-    const u = num($("userRate"));
-    return (isFinite(u) && u > 0) ? u : (S.live ? S.live.rate : NaN);
-  };
-  const syncFrom = () => {
-    if (syncing) return; syncing = true;
-    const v = convFromTo(num($("amtFrom")), activeRate());
-    if (isFinite(v)) $("amtTo").value = v.toFixed(2);
-    syncing = false; renderSpread();
-  };
-  const syncTo = () => {
-    if (syncing) return; syncing = true;
-    const v = convToFrom(num($("amtTo")), activeRate());
-    if (isFinite(v)) $("amtFrom").value = v.toFixed(2);
-    syncing = false; renderSpread();
-  };
-  $("amtFrom").addEventListener("input", syncFrom);
-  $("amtTo").addEventListener("input", syncTo);
+  Array.from($("amtCurSeg").querySelectorAll("button")).forEach(b => {
+    b.addEventListener("click", () => { S.amtCur = b.dataset.a; renderSpread(); });
+  });
 
-  ["userRate","feeExch","feeSend","feeSwift","feeCorr","feeCS","annVol","avgTxn"]
-    .forEach(id => $(id).addEventListener("input", () => { if (id === "userRate") syncFrom(); else renderSpread(); }));
+  /* השלמת הנקודה העשרונית קורית ביציאה מהשדה ולא בכל הקשה — עריכה חיה
+     של הערך תוך כדי הקלדה מקפיצה את הסמן ושוברת מחיקה לאחור. */
+  $("userRate").addEventListener("blur", () => {
+    const raw = $("userRate").value.trim();
+    if (!raw) return;
+    const ref = S.live ? S.live.rate : NaN;
+    let v = /^\d+$/.test(raw) ? impliedDecimal(raw, ref) : num($("userRate"));
+    if (!isFinite(v) || v <= 0) return;
+    $("userRate").value = v.toFixed(rateDigits(isFinite(ref) ? ref : v));
+    renderSpread();
+  });
+
+  ["amt","userRate","feeExch","feeSend","feeSwift","feeCorr","feeCS","annVol","avgTxn"]
+    .forEach(id => $(id).addEventListener("input", renderSpread));
   ["invUsd","invCny"].forEach(id => $(id).addEventListener("input", renderYuan));
 
   $("copySpread").addEventListener("click", () => copyText($("msgSpread").textContent));
