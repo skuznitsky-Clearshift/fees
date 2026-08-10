@@ -492,6 +492,19 @@ select{cursor:pointer;-webkit-appearance:none;appearance:none;
 .seg button{font-family:inherit;font-size:13px;font-weight:600;border:0;background:var(--surface-2);
             color:var(--muted);padding:8px 14px;cursor:pointer;min-height:38px}
 .seg button.on{background:var(--accent);color:#fff}
+.seg.wide{display:flex;width:100%}
+.seg.wide button{flex:1;font-size:14.5px;padding:11px 10px;min-height:46px}
+
+/* ---------- כפתור הבדיקה ---------- */
+.checkpanel{text-align:center}
+.btn.big{font-size:17px;padding:15px 40px;min-height:54px;border-radius:12px;
+         box-shadow:0 2px 10px rgba(22,115,152,.25)}
+.btn.big:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+
+/* קנבס הקונפטי — שכבה שקופה מעל הדף שלא חוסמת שום לחיצה */
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:150;
+          display:none}
+#confetti.on{display:block}
 
 /* ---------- טבלת פירוט ---------- */
 table.b{width:100%;border-collapse:collapse;margin-top:8px}
@@ -567,6 +580,16 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 
   <div class="panel">
     <div class="lbl">ההמרה</div>
+
+    <div style="margin-bottom:15px">
+      <span style="font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">סוג הלקוח</span>
+      <div class="seg wide" id="ctypeSeg">
+        <button data-t="importer" class="on">יבואן</button>
+        <button data-t="exporter">יצואן / עמותה</button>
+      </div>
+      <div class="sub" id="ctypeHint" style="margin-top:8px"></div>
+    </div>
+
     <div class="pair">
       <div class="side">
         <div class="cap">ממטבע</div>
@@ -677,14 +700,21 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
     <div class="sub" id="txnCount" style="margin-top:9px"></div>
   </div>
 
-  <div id="resultSpread"></div>
+  <div class="panel checkpanel">
+    <button class="btn big" id="checkBtn">בדוק חיסכון</button>
+    <div class="sub" id="checkHint" style="margin-top:10px"></div>
+  </div>
 
-  <div class="panel">
-    <div class="lbl">הסבר ללקוח — לשליחה בווטסאפ</div>
-    <div class="msgbox" id="msgSpread">—</div>
-    <div class="btnrow">
-      <button class="btn" id="copySpread">העתק את ההסבר</button>
-      <button class="btn ghost" id="waSpread">פתח בווטסאפ</button>
+  <div id="revealWrap" class="hide">
+    <div id="resultSpread"></div>
+
+    <div class="panel">
+      <div class="lbl">הסבר ללקוח — לשליחה בווטסאפ</div>
+      <div class="msgbox" id="msgSpread">—</div>
+      <div class="btnrow">
+        <button class="btn" id="copySpread">העתק את ההסבר</button>
+        <button class="btn ghost" id="waSpread">פתח בווטסאפ</button>
+      </div>
     </div>
   </div>
 </div>
@@ -727,15 +757,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
   </div>
 </div>
 
-<div class="wrap">
-  <div class="panel">
-    <div class="lbl">מפתח Twelve Data</div>
-    <div class="sub" style="margin-bottom:10px">הכלי מגיע עם מפתח מובנה. אם נגמרה המכסה היומית אפשר להדביק כאן מפתח אחר — הוא נשמר בדפדפן הזה בלבד.</div>
-    <div class="inp"><input id="apiKey" placeholder="מפתח חלופי (לא חובה)" style="font-family:var(--mono);direction:ltr;text-align:left;font-size:13px"></div>
-    <div class="btnrow"><button class="btn ghost" id="saveKey">שמור מפתח</button><button class="btn ghost" id="clearKey">חזור למפתח המובנה</button></div>
-  </div>
-</div>
-
+<canvas id="confetti"></canvas>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -743,7 +765,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.0", d: "10.08.2026" };
+const BUILD = { v: "1.1", d: "10.08.2026" };
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -826,7 +848,7 @@ async function copyText(txt){
 const rateCache = new Map();      // "USD/ILS" -> {rate, ts, at}
 const CACHE_MS = 45 * 1000;
 
-function apiKey(){ return store.get("td_key") || TD_KEY_BUILTIN; }
+function apiKey(){ return TD_KEY_BUILTIN; }
 
 function parseTD(json, symbols){
   /* התשובה מגיעה בשתי צורות: סימבול אחד -> {rate,timestamp};
@@ -889,8 +911,8 @@ async function ilsPer(code, force){
 function rateErrorHtml(e){
   const msg = String(e && e.message || e);
   let extra = "";
-  if (/api ?key|apikey|401/i.test(msg)) extra = " צריך מפתח Twelve Data תקין — אפשר להדביק אחד בתחתית העמוד.";
-  else if (/limit|429|credits/i.test(msg)) extra = " נגמרה המכסה של המפתח לרגע זה. נסה שוב בעוד דקה, או הדבק מפתח אחר בתחתית העמוד.";
+  if (/api ?key|apikey|401/i.test(msg)) extra = " המפתח של ספק השערים לא תקין — צריך לעדכן אותו בבנייה.";
+  else if (/limit|429|credits/i.test(msg)) extra = " נגמרה המכסה לרגע זה. נסה שוב בעוד דקה.";
   else if (/failed to fetch|network/i.test(msg)) extra = " נראה שאין חיבור לאינטרנט.";
   return '<div class="note bad"><b>לא הצלחתי לשלוף שער.</b> ' + esc(msg) + extra + '</div>';
 }
@@ -907,6 +929,7 @@ const S = {
   liveErr: null,
   dest: "us",
   tab: "spread",
+  revealed: false,     // התוצאה נחשפת רק אחרי לחיצה על "בדוק חיסכון"
   yuan: { usd: null, cny: null, err: null }
 };
 
@@ -929,6 +952,64 @@ function sides(){
   return { fx: CURBY[fxC], base: CURBY[baseC], buying: (S.to === fxC) };
 }
 function foreignSide(){ return sides().fx.c; }
+
+/* יבואן קונה מטבע זר בשקלים — הוא מרוויח משער נמוך.
+   יצואן או עמותה ממירים מטבע זר לשקלים — הם מרוויחים משער גבוה.
+   זה בדיוק אותו דבר ככיוון ההמרה, ולכן סוג הלקוח נגזר ממנו ולא נשמר
+   בנפרד: אין שני מקורות אמת שיכולים להיפרד זה מזה. */
+function isImporter(){ return sides().buying; }
+function setCtype(t){
+  const fx = sides().fx.c;
+  if (t === "importer") { S.from = "ILS"; S.to = fx; }
+  else                  { S.from = fx;    S.to = "ILS"; }
+  $("curFrom").value = S.from; $("curTo").value = S.to;
+  /* מחשבון היואן בנוי סביב יבואן שמשלם לספק — ליצואן הוא חסר משמעות */
+  if (S.tab === "yuan" && t !== "importer") setTab("spread");
+  loadLive(false);
+}
+
+/* קונפטי — קנבס מלא־מסך שלא חוסם לחיצות, נמחק לבד בסוף */
+function confetti(){
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cv = $("confetti"), ctx = cv.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cv.classList.add("on");
+
+  const cols = ["#167398","#4aa8cc","#0f9d58","#f0b429","#d03b3b","#7a5fb0"];
+  const bits = [];
+  for (let i = 0; i < 150; i++) bits.push({
+    x: Math.random() * W, y: -20 - Math.random() * H * 0.6,
+    w: 6 + Math.random() * 7, h: 9 + Math.random() * 10,
+    vy: 1.7 + Math.random() * 2.8, vx: -1.1 + Math.random() * 2.2,
+    rot: Math.random() * Math.PI * 2, vr: -0.13 + Math.random() * 0.26,
+    sway: Math.random() * Math.PI * 2, c: cols[(Math.random() * cols.length) | 0]
+  });
+
+  const DUR = 4200, t0 = performance.now();
+  (function frame(now){
+    const t = now - t0;
+    ctx.clearRect(0, 0, W, H);
+    const fade = t > DUR - 1000 ? Math.max(0, (DUR - t) / 1000) : 1;
+    for (const b of bits) {
+      b.sway += 0.05;
+      b.x += b.vx + Math.sin(b.sway) * 0.9;
+      b.y += b.vy;
+      b.rot += b.vr;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.rot);
+      ctx.fillStyle = b.c;
+      ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+      ctx.restore();
+    }
+    if (t < DUR) requestAnimationFrame(frame);
+    else { ctx.clearRect(0, 0, W, H); cv.classList.remove("on"); }
+  })(t0);
+}
 
 /* בלי דגלים: Windows לא מרנדר דגלי מדינות ומציג במקומם את שתי האותיות
    ("US", "IL"), מה שנראה כמו תקלה. סמל המטבע הוא גם מה שבאמת עוזר לזהות. */
@@ -1028,6 +1109,9 @@ function computeSpread(){
   let spreadPct = NaN;
   if (isFinite(live) && isFinite(user) && live > 0) {
     spreadPct = sd.buying ? (user - live) / live * 100 : (live - user) / live * 100;
+    /* שער מוקלד הוא מעוגל בהגדרה, ולכן "אותו שער" יוצא חצי נקודת בסיס
+       מהשוק ומייצר "‎-5 ₪ (‎-0.00%)". מתחת לסף הזה אין מרווח אמיתי. */
+    if (Math.abs(spreadPct) < 0.005) spreadPct = 0;
   }
 
   /* סכום ההעברה, מנורמל ליחידות המטבע הזר וגם לשקלים */
@@ -1097,8 +1181,19 @@ function renderSpread(){
     $("rateErr").innerHTML = S.liveErr ? rateErrorHtml(S.liveErr) : "";
   }
 
+  /* סוג הלקוח נגזר מהכיוון, כך שגם חץ ההחלפה מעדכן את הכפתורים */
+  const imp = isImporter();
+  Array.from($("ctypeSeg").querySelectorAll("button")).forEach(b =>
+    b.classList.toggle("on", b.dataset.t === (imp ? "importer" : "exporter")));
+  $("ctypeHint").textContent = imp
+    ? "יבואן קונה " + u.fx.he + " בשקלים — שער נמוך יותר חוסך לו כסף."
+    : "יצואן או עמותה ממירים " + u.fx.he + " לשקלים — שער גבוה יותר מכניס להם יותר.";
+  $("tabYuan").style.opacity = imp ? "" : ".45";
+
   $("userRateUnit").textContent = u.txt;
-  $("userRateLbl").textContent = "השער שהלקוח מקבל (" + u.txt + ")";
+  $("userRateLbl").textContent = imp
+    ? "השער שהלקוח משלם בבנק (" + u.txt + ")"
+    : "השער שהלקוח מקבל בבנק (" + u.txt + ")";
   $("amtLblA").textContent = "סכום ב" + f.he;
   $("amtLblB").textContent = "סכום ב" + t.he;
   $("amtUnitA").textContent = f.c; $("amtUnitB").textContent = t.c;
@@ -1181,18 +1276,22 @@ function renderResultSpread(R){
     '<div class="sechd"><span class="t">בקלירשיפט</span><span class="r"></span></div>' +
     '<table class="b">'+rows2.join("")+'</table></div>';
 
-  const good = R.saveIls > 0;
-  html += '<div class="hero'+(good?"":" none")+'">' +
-    '<div class="k">'+(good?"החיסכון על ההעברה הזו":"אין חיסכון בהעברה הזו")+'</div>' +
-    '<div class="v">'+n0(Math.abs(R.saveIls))+' ₪</div>' +
-    '<div class="d">'+nf(Math.abs(R.savePct),2)+'% מסכום ההעברה</div></div>';
-
-  if (isFinite(R.annSaveIls)) {
-    html += '<div class="hero'+(R.annSaveIls>0?"":" none")+'" style="margin-top:12px">' +
-      '<div class="k">חיסכון שנתי משוער</div>' +
-      '<div class="v">'+n0(Math.abs(R.annSaveIls))+' ₪</div>' +
-      '<div class="d">לפי מחזור של <span class="num">'+n0(R.annVol)+'</span> '+esc(R.fx.c)+
-      ' ו־<span class="num">'+n0(R.txns)+'</span> פעולות בשנה · '+nf(Math.abs(R.annSavePct),2)+'% מהמחזור</div></div>';
+  if (R.saveIls > 0) {
+    html += '<div class="hero"><div class="k">החיסכון על ההעברה הזו</div>' +
+      '<div class="v">'+n0(R.saveIls)+' ₪</div>' +
+      '<div class="d">'+nf(R.savePct,2)+'% מסכום ההעברה</div></div>';
+    if (isFinite(R.annSaveIls) && R.annSaveIls > 0) {
+      html += '<div class="hero" style="margin-top:12px">' +
+        '<div class="k">חיסכון שנתי משוער</div>' +
+        '<div class="v">'+n0(R.annSaveIls)+' ₪</div>' +
+        '<div class="d">לפי מחזור של <span class="num">'+n0(R.annVol)+'</span> '+esc(R.fx.c)+
+        ' ו־<span class="num">'+n0(R.txns)+'</span> פעולות בשנה · '+nf(R.annSavePct,2)+'% מהמחזור</div></div>';
+    }
+  } else {
+    html += '<div class="note warn" style="margin-top:16px;font-size:14px">' +
+      '<b>נראה שהלקוח מקבל תנאים טובים בבנק שלו.</b> לפי הנתונים שהוזנו אין חיסכון — ' +
+      'העלות בקלירשיפט גבוהה ב־<span class="num">'+n0(Math.abs(R.saveIls))+'</span> ₪ ' +
+      '('+nf(Math.abs(R.savePct),2)+'%) על ההעברה הזו.</div>';
   }
   box.innerHTML = html;
 }
@@ -1217,7 +1316,8 @@ function msgSpread(R){
 
   /* ההדגמה הקבועה — 100 אלף דולר, כדי שהמספר יהיה מוחשי */
   const uIls = usdIls();
-  if (isFinite(R.spreadPct) && isFinite(uIls)) {
+  /* כשאין מרווח אין מה להדגים — "הפרש 0 ₪ לטובתכם" רק מבלבל */
+  if (isFinite(R.spreadPct) && R.spreadPct !== 0 && isFinite(uIls)) {
     const demoIls = 100000 * uIls;
     const gap = demoIls * R.spreadPct / 100;
     L.push("");
@@ -1228,8 +1328,10 @@ function msgSpread(R){
   }
 
   if (R.fee.on) {
+    /* בלי הכותרת כשכל העמלות אפס — אחרת מובטחת רשימה ואין אחריה כלום */
+    const anyFee = R.fee.exch || R.fee.send || R.fee.swift || R.fee.corr;
     L.push("");
-    L.push("בנוסף למרווח יש עמלות:");
+    if (anyFee) L.push("בנוסף למרווח יש עמלות:");
     if (R.fee.exch) L.push("· עמלת חליפין " + nf(R.fee.exch,2) + "%");
     if (R.fee.send) L.push("· עמלת שליחת מט\"ח " + nf(R.fee.send,2) + "%");
     if (R.fee.swift) L.push("· סוויפט " + n0(R.fee.swift) + " $ לפעולה");
@@ -1239,7 +1341,9 @@ function msgSpread(R){
       L.push("על העברה של " + n0(R.amtFx) + " " + fx.sym + ":");
       L.push("העלות שלכם היום: " + n0(R.bankIls) + " ₪ (" + nf(R.bankPct,2) + "%)");
       L.push("העלות בקלירשיפט: " + n0(R.csIls) + " ₪ (" + nf(R.csPct,2) + "%)");
-      L.push("החיסכון: " + n0(R.saveIls) + " ₪ — " + nf(R.savePct,2) + "%");
+      /* בלי המילה "חיסכון" כשאין חיסכון — אחרת ההודעה סותרת את עצמה */
+      if (R.saveIls > 0) L.push("החיסכון: " + n0(R.saveIls) + " ₪ — " + nf(R.savePct,2) + "%");
+      else L.push("כלומר אתם כבר בתנאים טובים — במקרה הזה אין לנו חיסכון להציע לכם.");
       if (!R.corrSave) L.push("(בתשלום ב" + fx.he + " עלות הבנקים המקשרים קיימת גם אצלנו, ולכן היא לא נספרת כחיסכון.)");
     }
   }
@@ -1375,6 +1479,8 @@ function msgYuan(R){
    חיווט
    ============================================================ */
 function setTab(name){
+  /* מחשבון היואן משווה לספק סיני מול יבואן. ליצואן אין מה להשוות שם. */
+  if (name === "yuan" && !isImporter()) { toast("מחשבון היואן רלוונטי ליבואנים בלבד"); return; }
   S.tab = name;
   $("tabSpread").classList.toggle("on", name === "spread");
   $("tabYuan").classList.toggle("on", name === "yuan");
@@ -1426,6 +1532,24 @@ function init(){
     renderSpread();
   });
 
+  Array.from($("ctypeSeg").querySelectorAll("button")).forEach(b => {
+    b.addEventListener("click", () => setCtype(b.dataset.t));
+  });
+
+  $("checkBtn").addEventListener("click", () => {
+    const R = computeSpread();
+    const hint = $("checkHint");
+    if (!isFinite(R.live))  { hint.textContent = "עוד אין שער שוק — נסה שוב בעוד רגע."; return; }
+    if (!isFinite(R.user))  { hint.textContent = "צריך להזין את השער שהלקוח מקבל בבנק."; return; }
+    if (!isFinite(R.amtIls) || R.amtIls <= 0) { hint.textContent = "צריך להזין את סכום ההעברה."; return; }
+    hint.textContent = "";
+    S.revealed = true;
+    $("revealWrap").classList.remove("hide");
+    renderSpread();
+    $("resultSpread").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (R.saveIls > 0) confetti();
+  });
+
   Array.from($("destSeg").querySelectorAll("button")).forEach(b => {
     b.addEventListener("click", () => {
       S.dest = b.dataset.d;
@@ -1464,19 +1588,6 @@ function init(){
   $("copyYuan").addEventListener("click",   () => copyText($("msgYuan").textContent));
   $("waSpread").addEventListener("click", () => window.open("https://wa.me/?text=" + encodeURIComponent($("msgSpread").textContent), "_blank"));
   $("waYuan").addEventListener("click",   () => window.open("https://wa.me/?text=" + encodeURIComponent($("msgYuan").textContent), "_blank"));
-
-  const savedKey = store.get("td_key");
-  if (savedKey) $("apiKey").value = savedKey;
-  $("saveKey").addEventListener("click", () => {
-    const k = $("apiKey").value.trim();
-    if (!k) { toast("לא הוזן מפתח"); return; }
-    store.set("td_key", k); rateCache.clear(); toast("המפתח נשמר");
-    loadLive(true); if (S.tab === "yuan") loadYuan(true);
-  });
-  $("clearKey").addEventListener("click", () => {
-    store.del("td_key"); $("apiKey").value = ""; rateCache.clear(); toast("חזרנו למפתח המובנה");
-    loadLive(true); if (S.tab === "yuan") loadYuan(true);
-  });
 
   renderSpread();
   loadLive(false);
