@@ -524,6 +524,10 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
          font-weight:700;letter-spacing:-.03em;color:var(--good-ink);direction:ltr;unicode-bidi:isolate;
          margin-top:4px;line-height:1.1}
 .hero .d{font-size:13px;color:var(--good-ink);opacity:.85;margin-top:6px}
+.hero2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.hero2 .hero{margin-top:0}
+.hero2 .v{font-size:clamp(24px,6.5vw,34px)}
+@media (max-width:520px){.hero2{grid-template-columns:1fr}}
 .hero.none{background:var(--warn-bg);border-color:rgba(215,150,20,.35)}
 .hero.none .k,.hero.none .v,.hero.none .d{color:var(--warn-ink)}
 
@@ -620,9 +624,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
       <span class="k" id="userRateLbl">השער שהלקוח מקבל בבנק</span>
       <div class="inp">
         <input id="userRate" inputmode="decimal" placeholder="0.0000">
-        <span class="u" id="userRateUnit"></span>
       </div>
-      <div class="sub" id="userRateTip" style="margin-top:7px"></div>
     </div>
 
     <div id="spreadOut" style="margin-top:13px"></div>
@@ -630,9 +632,10 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 
   <div class="panel">
     <div class="lbl">סכום ההעברה</div>
+    <!-- ב-RTL הכפתור הראשון יושב מימין: המט"ח מימין, השקל משמאל -->
     <div class="seg wide" id="amtCurSeg">
-      <button data-a="ils">בשקלים</button>
       <button data-a="fx" class="on">בדולרים</button>
+      <button data-a="ils">בשקלים</button>
     </div>
     <div class="inp" style="margin-top:11px">
       <input id="amt" inputmode="decimal" placeholder="0"><span class="u" id="amtUnit"></span>
@@ -763,7 +766,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.2", d: "10.08.2026" };
+const BUILD = { v: "1.3", d: "12.08.2026" };
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -946,6 +949,8 @@ const S = {
   liveErr: null,
   dest: "us",
   amtCur: "fx",        // הסכום מוזן במטבע הזר כברירת מחדל, לא בשקלים
+  rateEntered: false,  // המרווח מוצג רק כשהשער בשדה סופי
+  avgTouched: false,   // "פעולה ממוצעת" נגררת אחרי סכום ההעברה עד לעריכה ידנית
   tab: "spread",
   revealed: false,     // התוצאה נחשפת רק אחרי לחיצה על "בדוק חיסכון"
   yuan: { usd: null, cny: null, err: null }
@@ -1124,6 +1129,31 @@ function impliedDecimal(digits, ref){
   return best;
 }
 
+/* אותו רעיון בשדות האחוזים, אבל בלי שער ייחוס להשוות אליו. עמלות בנק
+   על מט"ח הן תמיד מתחת לאחוז, ולכן "19" הוא 0.19% ו־"5" הוא 0.5%.
+   מי שבאמת רוצה 1% מקליד נקודה, וכל קלט עם נקודה נשאר כפי שהוא. */
+function impliedPct(digits){
+  if (!/^\d+$/.test(digits)) return NaN;
+  const v = parseFloat("0." + digits);
+  return isFinite(v) ? v : NaN;
+}
+
+/* חיווט משותף לשדה שמשלים נקודה עשרונית ביציאה ממנו */
+function attachImplied(id, resolve, fmt){
+  const el = $(id);
+  el.addEventListener("blur", () => {
+    const raw = el.value.trim();
+    if (!raw) return;
+    const v = /^\d+$/.test(raw) ? resolve(raw) : num(el);
+    if (!isFinite(v) || v <= 0) return;
+    el.value = fmt(v);
+    renderSpread();
+  });
+}
+/* אחוזים בלי אפסים מיותרים: 0.19 ולא 0.190, אבל 0.125 נשמר במלואו.
+   חישוב ספרות ישיר נשבר כאן על נקודה צפה (0.19*1000 = 189.999…). */
+function fmtPct(v){ return String(Math.round(v * 1000) / 1000); }
+
 function computeSpread(){
   const live = S.live ? S.live.rate : NaN;
   const user = num($("userRate"));
@@ -1174,7 +1204,10 @@ function computeSpread(){
 
   /* שנתי — האחוזים גדלים עם המחזור, הסכומים הקבועים עם מספר הפעולות.
      המחזור מוזן במטבע הזר, כי ככה לקוח מדבר: "מחזור של 3 מיליון דולר". */
-  const annVol = num($("annVol")), avgTxn = num($("avgTxn"));
+  /* "פעולה ממוצעת" מתחילה כהמלצה — סכום ההעברה שלמעלה. ברגע שנגעו בה
+     ידנית היא מפסיקה להיגרר, אחרת שינוי בסכום היה דורס את מה שהוקלד. */
+  const annVol = num($("annVol"));
+  const avgTxn = S.avgTouched ? num($("avgTxn")) : amtFx;
   const txns = isFinite(annVol) && isFinite(avgTxn) && avgTxn > 0 ? annVol / avgTxn : NaN;
   const annVolIls = isFinite(annVol) && isFinite(ilsUnitFx) ? annVol * ilsUnitFx : NaN;
   let annSaveIls = NaN;
@@ -1188,7 +1221,9 @@ function computeSpread(){
   }
   const annSavePct = isFinite(annSaveIls) && isFinite(annVolIls) && annVolIls > 0 ? annSaveIls / annVolIls * 100 : NaN;
 
-  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtIls, amtPaidIls, amtFx, amtUsd,
+  const monSaveIls = isFinite(annSaveIls) ? annSaveIls / 12 : NaN;
+
+  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtIls, amtPaidIls, amtFx, amtUsd, avgTxn, monSaveIls,
            swiftPct, corrPct, bankPct, csPct, savePct, bankIls, csIls, saveIls, corrSave,
            txns, annVol, annVolIls, annSaveIls, annSavePct, fixedUsd };
 }
@@ -1221,21 +1256,13 @@ function renderSpread(){
     : "יצואן או עמותה ממירים " + u.fx.he + " לשקלים — שער גבוה יותר מכניס להם יותר.";
   $("tabYuan").style.opacity = imp ? "" : ".45";
 
-  /* דוגמה חיה לקיצור ההקלדה, מבוססת על השער האמיתי של הצמד הנוכחי */
-  if (S.live) {
-    const ex = S.live.rate.toFixed(rateDigits(S.live.rate));
-    $("userRateTip").textContent = "אפשר להקליד רק ספרות — " + ex.replace(".", "") +
-                                   " יושלם אוטומטית ל־" + ex + ".";
-  } else $("userRateTip").textContent = "";
-
-  $("userRateUnit").textContent = u.txt;
   $("userRateLbl").textContent = imp
     ? "השער שהלקוח משלם בבנק (" + u.txt + ")"
     : "השער שהלקוח מקבל בבנק (" + u.txt + ")";
   /* בורר מטבע הסכום: ברירת המחדל היא המטבע הזר, לא השקל */
   const segA = Array.from($("amtCurSeg").querySelectorAll("button"));
-  segA[0].textContent = inCur(u.base.c);
-  segA[1].textContent = inCur(u.fx.c);
+  segA[0].textContent = inCur(u.fx.c);      // מימין — המט"ח
+  segA[1].textContent = inCur(u.base.c);    // משמאל — השקל
   segA.forEach(b => b.classList.toggle("on", b.dataset.a === S.amtCur));
   $("amtUnit").textContent = S.amtCur === "fx" ? u.fx.c : u.base.c;
 
@@ -1247,10 +1274,11 @@ function renderSpread(){
 
   const R = computeSpread();
 
-  /* המרווח */
+  /* המרווח מוצג רק אחרי שההקלדה הסתיימה והנקודה העשרונית הוכרעה —
+     אחרת הוא מהבהב במספרים חסרי משמעות תוך כדי הקלדה. */
   const sp = $("spreadOut");
-  if (!isFinite(R.spreadPct)) {
-    sp.innerHTML = '<div class="sub">הזן את השער שהלקוח מקבל כדי לראות את המרווח.</div>';
+  if (!S.rateEntered || !isFinite(R.spreadPct)) {
+    sp.innerHTML = "";
   } else if (R.spreadPct > 0.02) {
     const cls = R.spreadPct >= 1 ? "bad" : "warn";
     sp.innerHTML = '<span class="chip '+cls+'">המרווח: <span class="n">'+nf(R.spreadPct,2)+'%</span> מעל שער השוק</span>';
@@ -1274,6 +1302,9 @@ function renderSpread(){
         ? "כלומר " + n0(R.amtPaidIls) + " ₪ בשער של הלקוח"
         : "כלומר " + n0(R.amtFx) + " " + u.fx.c + " בשער של הלקוח")
     : "בחר מטבע והזן את סכום ההעברה.";
+
+  /* משקפים את ההמלצה לתוך השדה כל עוד לא נגעו בו ידנית */
+  if (!S.avgTouched) $("avgTxn").value = isFinite(R.avgTxn) ? Math.round(R.avgTxn) : "";
 
   /* מספר פעולות */
   $("txnCount").textContent = isFinite(R.txns)
@@ -1326,16 +1357,24 @@ function renderResultSpread(R){
     '<table class="b">'+rows2.join("")+'</table></div>';
 
   if (R.saveIls > 0) {
+    /* saveBlock הוא היעד שאליו הדף גולל אחרי לחיצה על "בדוק חיסכון" */
+    html += '<div id="saveBlock">';
     html += '<div class="hero"><div class="k">החיסכון על ההעברה הזו</div>' +
       '<div class="v">'+n0(R.saveIls)+' ₪</div>' +
       '<div class="d">'+nf(R.savePct,2)+'% מסכום ההעברה</div></div>';
     if (isFinite(R.annSaveIls) && R.annSaveIls > 0) {
-      html += '<div class="hero" style="margin-top:12px">' +
-        '<div class="k">חיסכון שנתי משוער</div>' +
-        '<div class="v">'+n0(R.annSaveIls)+' ₪</div>' +
-        '<div class="d">לפי מחזור של <span class="num">'+n0(R.annVol)+'</span> '+esc(R.fx.c)+
-        ' ו־<span class="num">'+n0(R.txns)+'</span> פעולות בשנה · '+nf(R.annSavePct,2)+'% מהמחזור</div></div>';
+      html += '<div class="hero2">' +
+        '<div class="hero"><div class="k">חיסכון חודשי משוער</div>' +
+          '<div class="v">'+n0(R.monSaveIls)+' ₪</div>' +
+          '<div class="d">ממוצע על פני השנה</div></div>' +
+        '<div class="hero"><div class="k">חיסכון שנתי משוער</div>' +
+          '<div class="v">'+n0(R.annSaveIls)+' ₪</div>' +
+          '<div class="d">'+nf(R.annSavePct,2)+'% מהמחזור</div></div>' +
+        '</div>' +
+        '<div class="sub" style="text-align:center;margin-top:10px">לפי מחזור של <span class="num">'+
+        n0(R.annVol)+'</span> '+esc(R.fx.c)+' ו־<span class="num">'+n0(R.txns)+'</span> פעולות בשנה</div>';
     }
+    html += '</div>';
   } else {
     html += '<div class="note warn" style="margin-top:16px;font-size:14px">' +
       '<b>נראה שהלקוח מקבל תנאים טובים בבנק שלו.</b> לפי הנתונים שהוזנו אין חיסכון — ' +
@@ -1598,7 +1637,10 @@ function init(){
     S.revealed = true;
     $("revealWrap").classList.remove("hide");
     renderSpread();
-    $("resultSpread").scrollIntoView({ behavior: "smooth", block: "start" });
+    /* כשיש חיסכון גוללים ישר למספרים החודשי והשנתי — זה מה שמראים ללקוח.
+       כשאין, גוללים לפירוט שמסביר למה. */
+    const target = $("saveBlock") || $("resultSpread");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
     if (R.saveIls > 0) confetti();
   });
 
@@ -1616,15 +1658,21 @@ function init(){
 
   /* השלמת הנקודה העשרונית קורית ביציאה מהשדה ולא בכל הקשה — עריכה חיה
      של הערך תוך כדי הקלדה מקפיצה את הסמן ושוברת מחיקה לאחור. */
-  $("userRate").addEventListener("blur", () => {
-    const raw = $("userRate").value.trim();
-    if (!raw) return;
-    const ref = S.live ? S.live.rate : NaN;
-    let v = /^\d+$/.test(raw) ? impliedDecimal(raw, ref) : num($("userRate"));
-    if (!isFinite(v) || v <= 0) return;
-    $("userRate").value = v.toFixed(rateDigits(isFinite(ref) ? ref : v));
+  attachImplied("userRate",
+    raw => impliedDecimal(raw, S.live ? S.live.rate : NaN),
+    v => v.toFixed(rateDigits(S.live ? S.live.rate : v)));
+  attachImplied("feeExch", impliedPct, fmtPct);
+  attachImplied("feeSend", impliedPct, fmtPct);
+
+  /* המרווח נחשף רק כשהערך בשדה סופי — כלומר אחרי היציאה ממנו */
+  $("userRate").addEventListener("input", () => { S.rateEntered = false; });
+  $("userRate").addEventListener("blur",  () => {
+    S.rateEntered = isFinite(num($("userRate"))) && num($("userRate")) > 0;
     renderSpread();
   });
+
+  /* ברגע שנגעו ידנית ב"פעולה ממוצעת" היא מפסיקה להיגרר אחרי סכום ההעברה */
+  $("avgTxn").addEventListener("input", () => { S.avgTouched = true; });
 
   ["amt","userRate","feeExch","feeSend","feeSwift","feeCorr","feeCS","annVol","avgTxn"]
     .forEach(id => $(id).addEventListener("input", renderSpread));
