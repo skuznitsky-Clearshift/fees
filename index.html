@@ -766,7 +766,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.3", d: "12.08.2026" };
+const BUILD = { v: "1.4", d: "12.08.2026" };
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -1340,6 +1340,9 @@ function renderResultSpread(R){
   const rows2 = [];
   if (R.fee.on) {
     rows2.push(pctRow("עמלת קלירשיפט", R.fee.cs, A*R.fee.cs/100));
+    /* לקלירשיפט אין עלות סוויפט בכלל. מציגים את זה כשורת אפס מפורשת ולא
+       משמיטים — שורה נעדרת נראית כמו שכחה, לא כמו יתרון. */
+    if (R.fee.swift) rows2.push(pctRow("עמלת סוויפט", 0, 0, "אין עלות כזו בקלירשיפט", true));
     if (!R.corrSave) rows2.push(pctRow("בנקים מקשרים", R.corrPct, isFinite(R.corrPct)?A*R.corrPct/100:NaN, "קיים גם בקלירשיפט ב"+R.fx.he));
     else rows2.push(pctRow("בנקים מקשרים", 0, 0, "אין עלות כזו ב"+R.fx.he+(R.fx.c==="USD"?destHe():""), true));
     rows2.push(pctRow("מרווח שער", 0, 0, "המרה לפי שער השוק", true));
