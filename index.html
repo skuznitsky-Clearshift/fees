@@ -592,6 +592,11 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
         <button data-t="exporter">יצואן / עמותה</button>
       </div>
       <div class="sub" id="ctypeHint" style="margin-top:8px"></div>
+      <!-- רק ליצואן ולעמותה: מי שלא מזדכה על מע"מ נושא אותו בפועל -->
+      <div id="vatWrap" class="hide" style="margin-top:11px">
+        <label class="check"><input type="checkbox" id="vatRecover" checked> מזדכה על מע"מ</label>
+        <div class="sub" id="vatHint" style="margin-top:6px"></div>
+      </div>
     </div>
 
     <div class="pair">
@@ -770,7 +775,8 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.7", d: "12.08.2026" };
+const BUILD = { v: "1.8", d: "12.08.2026" };
+const VAT = 0.18;
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -954,6 +960,7 @@ const S = {
   dest: "us",
   amtCur: "fx",        // הסכום מוזן במטבע הזר כברירת מחדל, לא בשקלים
   msgStyle: "sales",   // סגנון ההודעה ללקוח: מכירתי או מפורט
+  vatRecover: true,    // יצואן/עמותה שמזדכה על מע"מ — ברירת המחדל
   rateEntered: false,  // המרווח מוצג רק כשהשער בשדה סופי
   avgTouched: false,   // "פעולה ממוצעת" נגררת אחרי סכום ההעברה עד לעריכה ידנית
   tab: "spread",
@@ -1210,7 +1217,14 @@ function computeSpread(){
   const spreadCostPct = isFinite(spreadPct) ? spreadPct : 0;
   const bankPct = spreadCostPct + (fee.on ? fee.exch + fee.send + (isFinite(swiftPct)?swiftPct:0) + (isFinite(corrPct)?corrPct:0) : 0);
   const corrSave = corrIsSaving();
-  const csPct = (fee.on ? fee.cs : 0) + (fee.on && !corrSave && isFinite(corrPct) ? corrPct : 0);
+
+  /* יצואן או עמותה שלא מזדכים על מע"מ נושאים אותו בפועל, ולכן העמלה
+     שלנו מוצגת להם מגולמת. מוחל על עמלת קלירשיפט בלבד — לא על עלות
+     הבנקים המקשרים, שהיא הוצאה במעבר. */
+  const vatOn = !sd.buying && !S.vatRecover;
+  const csFeePct = fee.cs * (vatOn ? 1 + VAT : 1);
+
+  const csPct = (fee.on ? csFeePct : 0) + (fee.on && !corrSave && isFinite(corrPct) ? corrPct : 0);
   const savePct = bankPct - csPct;
 
   const bankIls = isFinite(amtIls) ? amtIls * bankPct / 100 : NaN;
@@ -1227,7 +1241,7 @@ function computeSpread(){
   const annVolIls = isFinite(annVol) && isFinite(ilsUnitFx) ? annVol * ilsUnitFx : NaN;
   let annSaveIls = NaN;
   if (isFinite(annVolIls)) {
-    const pctPart = spreadCostPct + (fee.on ? fee.exch + fee.send - fee.cs : 0);
+    const pctPart = spreadCostPct + (fee.on ? fee.exch + fee.send - csFeePct : 0);
     let fixedPart = 0;
     if (fee.on && isFinite(txns) && isFinite(usdIls())) {
       fixedPart = txns * (fee.swift + (corrSave ? fee.corr : 0)) * usdIls();
@@ -1238,7 +1252,7 @@ function computeSpread(){
 
   const monSaveIls = isFinite(annSaveIls) ? annSaveIls / 12 : NaN;
 
-  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtIls, amtPaidIls, amtFx, amtUsd, avgTxn, monSaveIls,
+  return { live, user, spreadPct, buying: sd.buying, base: sd.base, fee, fx, amtIls, amtPaidIls, amtFx, amtUsd, avgTxn, monSaveIls, vatOn, csFeePct,
            swiftPct, corrPct, bankPct, csPct, savePct, bankIls, csIls, saveIls, corrSave,
            txns, annVol, annVolIls, annSaveIls, annSavePct, fixedUsd };
 }
@@ -1271,6 +1285,13 @@ function renderSpread(){
     : "יצואן או עמותה ממירים " + u.fx.he + " לשקלים — שער גבוה יותר מכניס להם יותר.";
   $("tabYuan").style.opacity = imp ? "" : ".45";
   $("feeSendLbl").textContent = sendFeeLabel();
+
+  /* שאלת המע"מ נוגעת רק ליצואן ולעמותה — יבואן לא נשאל בכלל */
+  $("vatWrap").classList.toggle("hide", imp);
+  $("vatRecover").checked = S.vatRecover;
+  $("vatHint").textContent = S.vatRecover
+    ? "העמלה של קלירשיפט מוצגת ללא מע\"מ, כי הלקוח מקבל אותו חזרה."
+    : "העמלה של קלירשיפט מוצגת כולל מע\"מ " + n0(VAT*100) + "% — בכל החישובים וההודעה.";
 
   $("userRateLbl").textContent = imp
     ? "השער שהלקוח משלם בבנק (" + u.txt + ")"
@@ -1357,7 +1378,8 @@ function renderResultSpread(R){
 
   const rows2 = [];
   if (R.fee.on) {
-    rows2.push(pctRow("עמלת קלירשיפט", R.fee.cs, A*R.fee.cs/100));
+    rows2.push(pctRow("עמלת קלירשיפט" + (R.vatOn ? " (כולל מע\"מ)" : ""), R.csFeePct, A*R.csFeePct/100,
+                      R.vatOn ? nf(R.fee.cs,2) + "% + מע\"מ " + n0(VAT*100) + "%" : ""));
     /* לקלירשיפט אין עלות סוויפט בכלל. מציגים את זה כשורת אפס מפורשת ולא
        משמיטים — שורה נעדרת נראית כמו שכחה, לא כמו יתרון. */
     if (R.fee.swift) rows2.push(pctRow("עמלת סוויפט", 0, 0, "אין עלות כזו בקלירשיפט", true));
@@ -1453,7 +1475,8 @@ function msgSpread(R){
       L.push("");
       L.push("על העברה של " + n0(R.amtFx) + " " + fx.sym + ":");
       L.push("העלות שלכם היום: " + n0(R.bankIls) + " ₪ (" + nf(R.bankPct,2) + "%)");
-      L.push("העלות בקלירשיפט: " + n0(R.csIls) + " ₪ (" + nf(R.csPct,2) + "%)");
+      L.push("העלות בקלירשיפט: " + n0(R.csIls) + " ₪ (" + nf(R.csPct,2) + "%)" +
+             (R.vatOn ? " — כולל מע\"מ" : ""));
       /* בלי המילה "חיסכון" כשאין חיסכון — אחרת ההודעה סותרת את עצמה */
       if (R.saveIls > 0) L.push("החיסכון: " + n0(R.saveIls) + " ₪ — " + nf(R.savePct,2) + "%");
       else L.push("כלומר אתם כבר בתנאים טובים — במקרה הזה אין לנו חיסכון להציע לכם.");
@@ -1511,8 +1534,9 @@ function msgSpreadSales(R){
   L.push("⬅️ סה\"כ עלות בבנק: " + n0(R.bankIls) + " ₪ (" + nf(R.bankPct,2) + "%)");
   L.push("");
   L.push("⚡ בקלירשיפט (שער השוק - ללא מרווח!):");
-  L.push("⬅️ סה\"כ עמלה אחת שקופה: " + sym + nSmart(R.amtFx * R.fee.cs / 100) +
-         " (" + nf(R.fee.cs,2) + "%) " + nSmart(R.amtIls * R.fee.cs / 100) + " ₪");
+  L.push("⬅️ סה\"כ עמלה אחת שקופה: " + sym + nSmart(R.amtFx * R.csFeePct / 100) +
+         " (" + nf(R.csFeePct,2) + "%) " + nSmart(R.amtIls * R.csFeePct / 100) + " ₪" +
+         (R.vatOn ? " — כולל מע\"מ" : ""));
   /* הבנקים המקשרים מוצגים בצד שלנו רק כשהם באמת קיימים בו */
   if (R.fee.corr && R.corrSave) L.push("(*בארה\"ב/אירופה גם אין בנקים מקשרים)");
   else if (R.fee.corr)          L.push("* בנקים מקשרים: $" + n0(R.fee.corr) + " (קיימים גם אצלנו ב" + fx.he + ")");
@@ -1747,6 +1771,8 @@ function init(){
   Array.from($("msgStyleSeg").querySelectorAll("button")).forEach(b => {
     b.addEventListener("click", () => { S.msgStyle = b.dataset.m; renderSpread(); });
   });
+
+  $("vatRecover").addEventListener("change", e => { S.vatRecover = e.target.checked; renderSpread(); });
 
   /* השלמת הנקודה העשרונית קורית ביציאה מהשדה ולא בכל הקשה — עריכה חיה
      של הערך תוך כדי הקלדה מקפיצה את הסמן ושוברת מחיקה לאחור. */
