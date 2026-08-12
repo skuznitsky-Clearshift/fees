@@ -711,6 +711,10 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 
     <div class="panel">
       <div class="lbl">הסבר ללקוח — לשליחה בווטסאפ</div>
+      <div class="seg wide" id="msgStyleSeg" style="margin-bottom:12px">
+        <button data-m="sales" class="on">מכירתי</button>
+        <button data-m="full">מפורט</button>
+      </div>
       <div class="msgbox" id="msgSpread">—</div>
       <div class="btnrow">
         <button class="btn" id="copySpread">העתק את ההסבר</button>
@@ -766,7 +770,7 @@ table.b .why{display:block;font-size:11.5px;color:var(--muted);font-weight:400;m
 /* ============================================================
    נתונים קבועים
    ============================================================ */
-const BUILD = { v: "1.6", d: "12.08.2026" };
+const BUILD = { v: "1.7", d: "12.08.2026" };
 
 /* המפתח המובנה. הדף ציבורי, ולכן המפתח גלוי בקוד — זה מסלול חינמי
    ולא נגרם חיוב אם מישהו משתמש בו, אבל הוא לא סוד. */
@@ -949,6 +953,7 @@ const S = {
   liveErr: null,
   dest: "us",
   amtCur: "fx",        // הסכום מוזן במטבע הזר כברירת מחדל, לא בשקלים
+  msgStyle: "sales",   // סגנון ההודעה ללקוח: מכירתי או מפורט
   rateEntered: false,  // המרווח מוצג רק כשהשער בשדה סופי
   avgTouched: false,   // "פעולה ממוצעת" נגררת אחרי סכום ההעברה עד לעריכה ידנית
   tab: "spread",
@@ -984,6 +989,8 @@ function isImporter(){ return sides().buying; }
 
 /* יבואן שולח מט"ח לספק; יצואן ועמותה מקבלים אותו. אותה עמלה, שם אחר. */
 function sendFeeLabel(){ return isImporter() ? "עמלת שליחת מט\"ח" : "עמלת קבלת מט\"ח"; }
+/* הגרסה המקוצרת, לסגנון ההודעה המכירתי */
+function sendFeeShort(){ return isImporter() ? "עמלת שליחה" : "עמלת קבלה"; }
 function setCtype(t){
   const fx = sides().fx.c;
   if (t === "importer") { S.from = "ILS"; S.to = fx; }
@@ -1321,7 +1328,9 @@ function renderSpread(){
     : "לפי המחזור והממוצע נגזר מספר הפעולות בשנה.";
 
   renderResultSpread(R);
-  $("msgSpread").textContent = msgSpread(R);
+  Array.from($("msgStyleSeg").querySelectorAll("button")).forEach(b =>
+    b.classList.toggle("on", b.dataset.m === S.msgStyle));
+  $("msgSpread").textContent = S.msgStyle === "sales" ? msgSpreadSales(R) : msgSpread(R);
 }
 
 function pctRow(label, pct, ils, why, off){
@@ -1459,6 +1468,73 @@ function msgSpread(R){
   }
   L.push("");
   L.push("מעבר לחיסכון, יש לנו שירות מעולה ונשמח לעבוד יחד.");
+  return L.join("\n");
+}
+
+/* ------------------------------------------------------------
+   סגנון ההודעה המכירתי — קצר, מסודר באימוג'ים, נגמר בשאלה.
+   הפורמט לפי הנוסח שהוגדר; המספרים מחושבים ולא מוקלדים, כדי
+   שהסכומים והאחוזים תמיד יסתדרו זה עם זה.
+   ------------------------------------------------------------ */
+/* ספרה אחת אחרי הנקודה, אבל בלי ".0" מיותר: 112.5 נשאר, 225 נשאר 225 */
+const nSmart = v => !isFinite(v) ? "—"
+  : (Math.abs(v) >= 1000 ? n0(v) : String(Math.round(v * 10) / 10));
+
+function msgSpreadSales(R){
+  if (!isFinite(R.live)) return "—";
+  const known = isFinite(R.amtFx) && isFinite(R.amtIls) && R.amtIls > 0;
+  if (!known || !isFinite(R.user)) return "הזן שער וסכום העברה כדי לקבל את ההודעה.";
+
+  const st = stampNow(S.live.ts);
+  const d2 = st.date.slice(0, 6) + st.date.slice(8);   // 12.08.2026 → 12.08.26
+  const fx = R.fx, sym = fx.sym;
+  const plural = inCur(fx.c).replace(/^ב/, "ה");        // "בדולרים" → "הדולרים"
+  const verb = isImporter() ? "העברת והמרת" : "קבלת והמרת";
+
+  /* כל שורת עמלה: אחוז, שקלים, ובסוגריים הסכום במטבע ההעברה */
+  const ils = p => n0(R.amtIls * p / 100);
+  const cur = p => sym + n0(R.amtFx * p / 100);
+
+  const L = [];
+  L.push("היי 👋");
+  L.push("");
+  L.push("בדקנו עבורך את עלויות " + verb + " " + plural + " מול הבנק:");
+  L.push("");
+  L.push("בדקנו העברה של " + sym + n0(R.amtFx) + " (ב -" + d2 + " בשעה " + st.time + "):");
+  L.push("");
+  L.push("🏦 בבנק (שער " + nfRate(R.user) + ") לעומת השער הרציף (" + nfRate(S.live.rate) + ") :");
+  if (R.spreadPct > 0)  L.push("* מרווח שער: (" + nf(R.spreadPct,2) + "%) " + ils(R.spreadPct) + " ₪ (" + cur(R.spreadPct) + ")");
+  if (R.fee.exch)       L.push("* עמלת חליפין (" + nf(R.fee.exch,2) + "%): " + ils(R.fee.exch) + " ₪ (" + cur(R.fee.exch) + ")");
+  if (R.fee.send)       L.push("* " + sendFeeShort() + " (" + nf(R.fee.send,2) + "%): " + ils(R.fee.send) + " ₪ (" + cur(R.fee.send) + ")");
+  if (R.fee.swift)      L.push("* סוויפט: $" + n0(R.fee.swift));
+  if (R.fee.corr)       L.push("* בנקים מקשרים: $" + n0(R.fee.corr));
+  L.push("⬅️ סה\"כ עלות בבנק: " + n0(R.bankIls) + " ₪ (" + nf(R.bankPct,2) + "%)");
+  L.push("");
+  L.push("⚡ בקלירשיפט (שער השוק - ללא מרווח!):");
+  L.push("⬅️ סה\"כ עמלה אחת שקופה: " + sym + nSmart(R.amtFx * R.fee.cs / 100) +
+         " (" + nf(R.fee.cs,2) + "%) " + nSmart(R.amtIls * R.fee.cs / 100) + " ₪");
+  /* הבנקים המקשרים מוצגים בצד שלנו רק כשהם באמת קיימים בו */
+  if (R.fee.corr && R.corrSave) L.push("(*בארה\"ב/אירופה גם אין בנקים מקשרים)");
+  else if (R.fee.corr)          L.push("* בנקים מקשרים: $" + n0(R.fee.corr) + " (קיימים גם אצלנו ב" + fx.he + ")");
+  L.push("");
+
+  if (R.saveIls > 0) {
+    L.push("🎁 החיסכון שלכם:");
+    L.push("* " + n0(R.saveIls) + " ₪ (" + nf(R.savePct,2) + "%) נשארים אצלכם בכיס בכל העברה כזו!");
+    if (isFinite(R.annSaveIls) && R.annSaveIls > 0) {
+      L.push("* במחזור שנתי של " + sym + n0(R.annVol) + " (כ-" + n0(R.txns) + " פעולות)");
+      L.push("⬅️ חיסכון משוער של " + n0(R.annSaveIls) + " ₪ בשנה! 🔥");
+    }
+    L.push("");
+    L.push("מעבר לחיסכון, נספק לך שירות מעולה ואישי.");
+    L.push("");
+    L.push("להכין לך את החשבון להעברה הקרובה?");
+  } else {
+    /* בלי חגיגות כשאין מה לחגוג — ההודעה עדיין נשלחת, רק בכנות */
+    L.push("נראה שאתם כבר בתנאים טובים מאוד בבנק, ובהעברה כזו אין לנו חיסכון להציע.");
+    L.push("");
+    L.push("נשמח בכל זאת להיות בקשר — יש לנו שירות מעולה ואישי, ותנאים משתנים.");
+  }
   return L.join("\n");
 }
 
@@ -1666,6 +1742,10 @@ function init(){
 
   Array.from($("amtCurSeg").querySelectorAll("button")).forEach(b => {
     b.addEventListener("click", () => { S.amtCur = b.dataset.a; renderSpread(); });
+  });
+
+  Array.from($("msgStyleSeg").querySelectorAll("button")).forEach(b => {
+    b.addEventListener("click", () => { S.msgStyle = b.dataset.m; renderSpread(); });
   });
 
   /* השלמת הנקודה העשרונית קורית ביציאה מהשדה ולא בכל הקשה — עריכה חיה
